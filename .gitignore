@@ -1,0 +1,9 @@
+.DS_Store
+.cargo-ok
+wrangler.toml
+node_modules/
+target
+wrangler.toml
+vc-server/credentials
+marketplace/node_modules
+contract/.env

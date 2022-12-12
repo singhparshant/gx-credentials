@@ -1,0 +1,243 @@
+<script lang="ts">
+  import { useNavigate } from 'svelte-navigator';
+  import { onMount, onDestroy } from 'svelte';
+  import {
+    claimsStream,
+    loadingContracts,
+    contractAddress,
+    networkStr,
+    userLog,
+  } from 'src/store';
+  import './availablecredentials.scss';
+  import { FileModal, ViewIcon, ClaimDisplay } from 'components';
+  import { PrimaryButton } from 'components/buttons';
+  import {
+    canUpload,
+    makeDownloadable,
+    isAllOnChain,
+    selectDisplayStatus,
+    // sortClaimsByStatus,
+    statusTextToClassMapping,
+  } from './uploadHelpers';
+  import Profile from './Profile.svelte';
+  import DeleteCredential from './DeleteCredential.svelte';
+  import MoreModal from './MoreModal/MoreModal.svelte';
+  import 'src/common/style/animation.scss';
+  import * as helpers from '../../../helpers/index';
+
+  let navigate = useNavigate();
+  let currentNetwork: string;
+  networkStr.subscribe((x) => {
+    currentNetwork = x;
+  });
+  let log: helpers.Log;
+
+  userLog.subscribe((x) => {
+    log = x;
+  });
+
+  let modalOpen = false;
+  let isDeleteModalOpen = false;
+  let isCredentialModalOpen = false;
+  let selectedClaimToView = null;
+
+  let selectedClaimToDelete = null;
+  const closeModal = () => {
+    modalOpen = false;
+  };
+
+  const openModal = () => {
+    modalOpen = true;
+  };
+
+  onMount(() => {
+    if (canUpload($claimsStream)) {
+      window.addEventListener('beforeunload', (e) => {
+        e.preventDefault();
+        return (e.returnValue = '');
+      });
+    }
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('beforeunload', () => {});
+  });
+</script>
+
+<div class="table-container fade-in mb-4 p-4">
+  <div class="header-row-container">
+    <div class="body flex flex-row items-center w-full justify-between">
+      <div class="text-xl sm:text-2xl font-bold body">Company Credentials</div>
+
+      <div class="flex flex-row items-center">
+        <div class="ml-4 font-semibold">
+          {#if log}
+            <PrimaryButton
+              small
+              text="View Logs"
+              onClick={() =>
+                window.open(
+                  `https://better-call.dev/${
+                    currentNetwork ? `${currentNetwork}` : ''
+                  }/KT1PjbYmrc3vaMwQKu8Y8KTiLPbhZckYiotd/storage`
+                )}
+            />
+          {/if}
+        </div>
+
+        {#if canUpload($claimsStream)}
+          <div class="ml-2">
+            <!-- {#if $contractAddress !== null} -->
+            <!-- {#if !isAllOnChain($claimsStream)} -->
+            <PrimaryButton
+              small
+              text="Issue Credentials"
+              onClick={async () => {
+                openModal();
+              }}
+            />
+            <!-- {/if} -->
+            <!-- {:else}
+              <div>
+                <PrimaryButton
+                  text="Deploy Credential"
+                  onClick={() => navigate('/deploy')}
+                  small
+                />
+              </div>
+            {/if} -->
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+  {#if $loadingContracts}
+    Loading...
+  {:else}
+    <table id="credential" class="w-full">
+      <tr>
+        <th class="text-left">Name</th>
+        <!-- <th class="text-left">Type</th> -->
+        <th class="text-left">Proof</th>
+        <th class="text-left">Status</th>
+        <th class="text-left">Last Action Date</th>
+        <th class="text-left">Action</th>
+      </tr>
+      <tbody class="table-content-continer">
+        {#each Object.values($claimsStream) as claim}
+          <tr>
+            <td class="flex flex-row items-center">
+              <div class="flex items-center justify-start">
+                <svelte:component
+                  this={claim.display.icon}
+                  class="sm:mr-3 w-4 h-4"
+                />
+              </div>
+              <div class="hidden sm:flex w-icon-describe-desk">
+                {claim.display.display}
+              </div>
+            </td>
+            <!-- <td class="px-2 sm:px-4 md:px-6">
+              {claim.display.type}
+            </td> -->
+            <td class="px-2 sm:px-4 md:px-6">
+              asc(s Validation
+              <!-- //{claim.display.proof} -->
+            </td>
+            <td
+              ><div
+                class={`status-tag status-${
+                  statusTextToClassMapping[selectDisplayStatus(log)]
+                }`}
+              >
+                <div class="capitalize">
+                  {selectDisplayStatus(log)}
+                </div>
+              </div></td
+            >
+            <td class="px-2 sm:px-4 md:px-6">
+              {log?.time ?? 'N/A'}
+              <!-- //{claim.display.proof} -->
+            </td>
+            <td class="flex flex-row items-center">
+              {#if claim.preparedContent}
+                <div
+                  on:click={() => {
+                    isCredentialModalOpen = true;
+                    selectedClaimToView = claim;
+                  }}
+                  class="cursor-pointer mr-2 sm:mr-4"
+                >
+                  <ViewIcon class="w-5 h-5 flex items-center justify-center" />
+                </div>
+                <MoreModal
+                  href={makeDownloadable(
+                    claim.content || claim.preparedContent
+                  )}
+                  downloadFileName={`${claim.display.display}.json`}
+                  {claim}
+                />
+              {:else if log?.message === 'Credentials have been revoked'}
+                <div
+                  on:click={() => navigate(claim.display.route)}
+                  class="primary-action cursor-pointer inline-block font-medium"
+                >
+                  Re-issue
+                </div>
+              {:else if log?.message === 'Credentials have been published to the blockchain'}
+                <div
+                  on:click={() => {
+                    isCredentialModalOpen = true;
+                    selectedClaimToView = claim;
+                  }}
+                  class="cursor-pointer mr-2 sm:mr-4"
+                >
+                  <ViewIcon class="w-5 h-5 flex items-center justify-center" />
+                </div>
+                <MoreModal
+                  href={makeDownloadable(
+                    claim.content || claim.preparedContent
+                  )}
+                  downloadFileName={`${claim.display.display}.json`}
+                  {claim}
+                />
+              {:else}
+                <div
+                  on:click={() => navigate(claim.display.route)}
+                  class="primary-action cursor-pointer inline-block font-medium"
+                >
+                  Issue
+                </div>
+              {/if}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  {/if}
+</div>
+
+{#if modalOpen}
+  <FileModal onClose={() => closeModal()}
+    ><div class="flex flex-column items-center">
+      <Profile onClose={() => closeModal()} />
+    </div>
+  </FileModal>
+{/if}
+
+{#if isCredentialModalOpen}
+  <FileModal onClose={() => (isCredentialModalOpen = false)}
+    ><div class="w-full">
+      <ClaimDisplay claim={selectedClaimToView} />
+    </div>
+  </FileModal>
+{/if}
+
+{#if isDeleteModalOpen}
+  <FileModal onClose={() => (isDeleteModalOpen = false)}
+    ><DeleteCredential
+      claim={selectedClaimToDelete}
+      onClose={() => (isDeleteModalOpen = false)}
+    />
+  </FileModal>
+{/if}
